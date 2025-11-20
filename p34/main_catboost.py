@@ -82,7 +82,7 @@ def build_model(use_gpu=False):
 # ---------------------------------------------------------------------
 def train_single_model(gpu, cat_data, y_train, y_val, model_dir, cat_features):
     start_time = time.time()
-    logging.info("▶ START training CATBOOST")
+    logging.info("   START training CATBOOST")
 
     model = build_model(use_gpu=gpu)
     model.fit(
@@ -99,7 +99,7 @@ def train_single_model(gpu, cat_data, y_train, y_val, model_dir, cat_features):
     with open(model_path, "wb") as f:
         pickle.dump(model, f)
 
-    logging.info(f"✓ FINISHED CATBOOST ({time.time() - start_time:.2f}s)")
+    logging.info(f"   FINISHED CATBOOST ({time.time() - start_time:.2f}s)")
     return val_preds
 
 # ---------------------------------------------------------------------
@@ -127,11 +127,11 @@ def main():
     test_path = processed_dir / "test_processed.joblib"
     logging.info(f"Using processed cache path: {processed_dir}")
 
-    logging.info("▶ Loading pre-built train/validation cluster features...")
+    logging.info("   Loading pre-built train/validation cluster features...")
     train = joblib.load(cfg["train_cluster_features"])
     val = joblib.load(cfg["val_cluster_features"])
     test = joblib.load(cfg["test_cluster_features"])
-    logging.info(f"✅ Loaded train {train.shape}, val {val.shape}, test {test.shape}")
+    logging.info(f"   Loaded train {train.shape}, val {val.shape}, test {test.shape}")
 
     datasets = {
         "train": (train_path, train),
@@ -178,10 +178,10 @@ def main():
         logging.info("🛑 preprocess_only=True → Skipping training and exiting.")
         return
 
-    logging.info("▶ Building feature matrices...")
+    logging.info("   Building feature matrices...")
     t0 = time.time()
     train_features, val_features, feature_cols, cat_features = build_feature_matrix(train_processed, val_processed)
-    logging.info(f"✓ Feature matrix built in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"   Feature matrix built in {(time.time() - t0)/60:.2f} min")
 
     X_train = train_features[feature_cols]
     y_train = train[TARGET].clip(lower=0).values
@@ -194,8 +194,8 @@ def main():
     val_preds = train_single_model(gpu, cat_data, y_train, y_val, cfg["model_dir"], cat_features)
 
     mae = mean_absolute_error(y_val_raw, val_preds)
-    logging.info(f"🏁 Final Validation MAE = {mae:.5f}")
-    logging.info(f"✅ All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"   Final Validation MAE = {mae:.5f}")
+    logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":

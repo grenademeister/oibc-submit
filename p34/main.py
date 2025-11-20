@@ -123,7 +123,7 @@ def build_model(model_name: str, use_gpu=False):
 # ---------------------------------------------------------------------
 def train_single_model(model_name, gpu, xgb_data, X_train, X_val, y_train, y_val, cat_features, model_dir):
     start_time = time.time()
-    logging.info(f"▶ START training {model_name.upper()}")
+    logging.info(f"   START training {model_name.upper()}")
 
     model = build_model(model_name, use_gpu=gpu)
 
@@ -150,7 +150,7 @@ def train_single_model(model_name, gpu, xgb_data, X_train, X_val, y_train, y_val
     with open(model_path, "wb") as f:
         pickle.dump(model, f)
 
-    logging.info(f"✓ FINISHED {model_name.upper()} ({time.time() - start_time:.2f}s)")
+    logging.info(f"   FINISHED {model_name.upper()} ({time.time() - start_time:.2f}s)")
     return model_name, val_preds
 
 # ---------------------------------------------------------------------
@@ -172,7 +172,7 @@ def find_best_weights(val_preds_list, y_val_raw, top_k: int = 4):
 
     results.sort(key=lambda x: x[0])
     best_score, best_weights = results[0]
-    logging.info(f"✅ Best MAE on validation = {best_score:.5f} with weights {best_weights}")
+    logging.info(f"   Best MAE on validation = {best_score:.5f} with weights {best_weights}")
 
     logging.info("📊 Top 4 weight combinations:")
     for i, (score, weights) in enumerate(results[:top_k], 1):
@@ -191,26 +191,26 @@ def main():
     params_file = Path(cfg["setting_dir"]) / "base_model_params.yaml"
     with open(params_file, "w") as f:
         yaml.safe_dump(BASE_MODEL_PARAMS, f)
-    logging.info(f"✓ Saved base model parameters → {params_file}")
+    logging.info(f"   Saved base model parameters → {params_file}")
 
     gpu = check_gpu_available() and cfg["use_gpu"]
     if cfg["use_gpu"] and not gpu:
         logging.warning("GPU requested but not available — running on CPU.")
 
-    # ✅ Load pre-built cluster-enhanced feature sets
-    logging.info("▶ Loading pre-built train/validation cluster features...")
+    #    Load pre-built cluster-enhanced feature sets
+    logging.info("   Loading pre-built train/validation cluster features...")
     train = joblib.load(cfg["train_cluster_features"])
     val = joblib.load(cfg["val_cluster_features"])
-    logging.info(f"✅ Loaded train ({train.shape}) and val ({val.shape}) cluster features")
+    logging.info(f"   Loaded train ({train.shape}) and val ({val.shape}) cluster features")
 
     train_processed = engineer_features(train).dropna(subset=[TARGET])
     val_processed = engineer_features(val)
 
     # Build aligned feature matrices
-    logging.info("▶ Building feature matrices...")
+    logging.info("   Building feature matrices...")
     t0 = time.time()
     train_features, val_features, feature_cols, cat_features = build_feature_matrix(train_processed, val_processed)
-    logging.info(f"✓ Feature matrix built in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"   Feature matrix built in {(time.time() - t0)/60:.2f} min")
 
     X_train = train_features[feature_cols]
     y_train = train[TARGET].clip(lower=0).values
@@ -237,15 +237,15 @@ def main():
     if len(model_list) > 1:
         weights = find_best_weights(val_preds_list, y_val_raw)
         ensemble_preds = sum(w * p for w, p in zip(weights, val_preds_list))
-        logging.info(f"✅ Using optimized weights: {weights}")
+        logging.info(f"   Using optimized weights: {weights}")
     else:
         ensemble_preds = val_preds_list[0]
-        logging.info(f"✅ Single model mode: {model_list[0]}")
+        logging.info(f"   Single model mode: {model_list[0]}")
 
     # Final validation evaluation
     mae = mean_absolute_error(y_val_raw, ensemble_preds)
-    logging.info(f"🏁 Final Validation MAE = {mae:.5f}")
-    logging.info(f"✅ All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"   Final Validation MAE = {mae:.5f}")
+    logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
