@@ -204,13 +204,6 @@ def main():
             Xv = Xv.reindex(columns=model_feature_names)
             Xt = Xt.reindex(columns=model_feature_names)
 
-            # dtypes for categorical features at inference
-            for c in cat_features:
-                if c in Xv.columns:
-                    # DEBUG: logging.info(f" LightGBM: Xv[{c}] dtype={Xv[c].dtype}")
-                if c in Xt.columns:
-                    # DEBUG: logging.info(f" LightGBM: Xt[{c}] dtype={Xt[c].dtype}")
-
             val_preds = model.predict(Xv)
             test_preds = model.predict(Xt)
 
