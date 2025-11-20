@@ -25,9 +25,7 @@ num_cluster = len(kmeans.cluster_centers_)
 print(f"Loaded trained KMeans model with {num_cluster} clusters")
 
 cluster_means = (
-    train_df.groupby(["hour", "cluster"])[select_column]
-    .mean()
-    .reset_index()
+    train_df.groupby(["hour", "cluster"])[select_column].mean().reset_index()
 )
 print(f"Extracted training cluster means: {cluster_means.shape}")
 
@@ -55,10 +53,16 @@ for c in range(num_cluster):
     sub = sub.drop(columns="cluster")
     sub = sub.add_prefix(f"cluster_{c}_")
     sub = sub.rename(columns={f"cluster_{c}_hour": "hour"})
-    df_cluster_all = sub if df_cluster_all is None else pd.merge(df_cluster_all, sub, on="hour", how="outer")
+    df_cluster_all = (
+        sub
+        if df_cluster_all is None
+        else pd.merge(df_cluster_all, sub, on="hour", how="outer")
+    )
 
 df = df.merge(df_cluster_all, on="hour", how="left")
-print(f"Merged full cluster-wide hourly means into validation data ({df_cluster_all.shape[1]} extra columns)")
+print(
+    f"Merged full cluster-wide hourly means into validation data ({df_cluster_all.shape[1]} extra columns)"
+)
 
 # Add distance-based ratios for all clusters
 coords = df[["coord1", "coord2"]].to_numpy()
@@ -70,8 +74,8 @@ print(f"Added distance-based ratio features for all {num_cluster} clusters")
 # Fill NaN values (forward + backward, preserve order)
 df = (
     df.sort_values(["cluster", "pv_id", "hour"])
-      .groupby("cluster", group_keys=False)
-      .apply(lambda g: g.ffill().bfill())
+    .groupby("cluster", group_keys=False)
+    .apply(lambda g: g.ffill().bfill())
 )
 
 df = df.sort_values("_orig_idx").reset_index(drop=True)

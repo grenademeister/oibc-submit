@@ -4,7 +4,9 @@ from sklearn.model_selection import train_test_split
 import os
 
 # Local variables
-csv_path = "/home/user/gy/oibc/code_wrap/oibc_code/data/train.csv"   # path to your CSV file
+csv_path = (
+    "/home/user/gy/oibc/code_wrap/oibc_code/data/train.csv"  # path to your CSV file
+)
 train_path = "/home/user/gy/oibc/code_wrap/oibc_code/data_split/train_split.csv"
 val_path = "/home/user/gy/oibc/code_wrap/oibc_code/data_split/val_split.csv"
 seed = 42
@@ -19,9 +21,9 @@ pv_ids = data["pv_id"].unique()
 # Split pv_ids into train and validation sets
 train_ids, val_ids = train_test_split(
     pv_ids,
-    test_size=ratio,         # ratio is for validation set
+    test_size=ratio,  # ratio is for validation set
     random_state=seed,
-    shuffle=True
+    shuffle=True,
 )
 
 # Filter the original dataframe based on pv_ids

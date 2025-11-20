@@ -37,6 +37,7 @@ GPU_MODEL_PARAMS: Dict[str, Dict] = {
     "xgboost": {"device": "cuda", "tree_method": "hist"},
 }
 
+
 # ---------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------
@@ -45,20 +46,24 @@ def setup_logging(log_path: Path):
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_path, "w"), logging.StreamHandler()]
+        handlers=[logging.FileHandler(log_path, "w"), logging.StreamHandler()],
     )
+
 
 def check_gpu_available():
     try:
         import torch
+
         return torch.cuda.is_available()
     except ImportError:
         import subprocess
+
         try:
             subprocess.check_output(["nvidia-smi"])
             return True
         except Exception:
             return False
+
 
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as f:
@@ -73,11 +78,13 @@ def load_config(config_path="config.yaml"):
         yaml.safe_dump(cfg, f_out)
     return cfg
 
+
 def build_model(use_gpu=False):
     params = BASE_MODEL_PARAMS["xgboost"].copy()
     if use_gpu:
         params.update(GPU_MODEL_PARAMS["xgboost"])
     return XGBRegressor(**params)
+
 
 # ---------------------------------------------------------------------
 # Training function
@@ -97,6 +104,7 @@ def train_single_model(gpu, xgb_data, y_train, y_val, model_dir):
 
     logging.info(f"   FINISHED XGBOOST ({time.time() - start_time:.2f}s)")
     return val_preds
+
 
 # ---------------------------------------------------------------------
 # Main
@@ -157,7 +165,9 @@ def main():
             logging.info(f"💾 Saved {name}_processed to {path}")
 
         # ### DEBUG: pv_id in processed?
-        logging.info(f"DEBUG [{name}_processed] has pv_id? {'pv_id' in df_proc.columns}")
+        logging.info(
+            f"DEBUG [{name}_processed] has pv_id? {'pv_id' in df_proc.columns}"
+        )
         processed_results[name] = df_proc
 
     train_processed = processed_results["train"]
@@ -177,7 +187,9 @@ def main():
     logging.info("🧩 Train columns:")
     for col in train_processed.columns:
         logging.info(f"  - {col}")
-    logging.info(f"DEBUG train_processed has pv_id? {'pv_id' in train_processed.columns}")
+    logging.info(
+        f"DEBUG train_processed has pv_id? {'pv_id' in train_processed.columns}"
+    )
 
     logging.info("🧩 Val columns:")
     for col in val_processed.columns:
@@ -242,6 +254,7 @@ def main():
     mae = mean_absolute_error(y_val_raw, val_preds)
     logging.info(f"   Final Validation MAE = {mae:.5f}")
     logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":

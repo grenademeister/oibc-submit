@@ -10,8 +10,8 @@ This script runs the complete workflow:
 5. Inference (generate predictions)
 
 Usage:
-    python run_pipeline.py --config p34/config.yaml [--step STEP]
-    
+    python run_pipeline.py --config src/config.yaml [--step STEP]
+
     Steps: split, cluster, features, train, infer, all (default)
 """
 
@@ -28,15 +28,13 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
 
 def load_config(config_path):
     """Load configuration file."""
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         return yaml.safe_load(f)
 
 
@@ -44,14 +42,9 @@ def run_command(cmd, description):
     """Run a shell command and log the output."""
     logging.info(f"Starting: {description}")
     logging.info(f"Command: {' '.join(cmd)}")
-    
+
     try:
-        result = subprocess.run(
-            cmd,
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         if result.stdout:
             logging.info(result.stdout)
         logging.info(f"Completed: {description}")
@@ -67,11 +60,8 @@ def step_split(config):
     logging.info("=" * 60)
     logging.info("STEP 1: Data Splitting")
     logging.info("=" * 60)
-    
-    return run_command(
-        ["python", "data_split/split.py"],
-        "Data splitting"
-    )
+
+    return run_command(["python", "scripts/split.py"], "Data splitting")
 
 
 def step_cluster(config):
@@ -79,21 +69,20 @@ def step_cluster(config):
     logging.info("=" * 60)
     logging.info("STEP 2: Clustering")
     logging.info("=" * 60)
-    
+
     # Run clustering on training data
     if not run_command(
-        ["python", "cluster_code/add_cluster_efficient.py"],
-        "Clustering training data"
+        ["python", "scripts/add_cluster_efficient.py"], "Clustering training data"
     ):
         return False
-    
+
     # Add cluster features to validation data
     if not run_command(
-        ["python", "cluster_code/add_cluster_from_train.py"],
-        "Adding cluster features to validation data"
+        ["python", "scripts/add_cluster_from_train.py"],
+        "Adding cluster features to validation data",
     ):
         return False
-    
+
     return True
 
 
@@ -102,7 +91,7 @@ def step_features(config):
     logging.info("=" * 60)
     logging.info("STEP 3: Feature Engineering")
     logging.info("=" * 60)
-    
+
     # This step is typically integrated into the training script
     # via preprocess.py which is imported by main.py
     logging.info("Feature engineering will be performed during training")
@@ -114,24 +103,21 @@ def step_train(config):
     logging.info("=" * 60)
     logging.info("STEP 4: Model Training")
     logging.info("=" * 60)
-    
-    mode = config.get('mode', 'ensemble')
-    
-    if mode == 'ensemble':
-        script = "p34/main.py"
-    elif mode == 'lightgbm':
-        script = "p34/main_lgbm.py"
-    elif mode == 'catboost':
-        script = "p34/main_catboost.py"
-    elif mode == 'xgboost':
-        script = "p34/main_xgb.py"
+
+    mode = config.get("mode", "ensemble")
+
+    if mode == "ensemble":
+        script = "src/main.py"
+    elif mode == "lightgbm":
+        script = "src/main_lgbm.py"
+    elif mode == "catboost":
+        script = "src/main_catboost.py"
+    elif mode == "xgboost":
+        script = "src/main_xgb.py"
     else:
-        script = "p34/main.py"
-    
-    return run_command(
-        ["python", script],
-        f"Model training ({mode})"
-    )
+        script = "src/main.py"
+
+    return run_command(["python", script], f"Model training ({mode})")
 
 
 def step_infer(config):
@@ -139,12 +125,9 @@ def step_infer(config):
     logging.info("=" * 60)
     logging.info("STEP 5: Inference")
     logging.info("=" * 60)
-    
+
     # Use weight_fixed.py for inference with fixed ensemble weights
-    return run_command(
-        ["python", "p34/weight_fixed.py"],
-        "Generating predictions"
-    )
+    return run_command(["python", "src/weight_fixed.py"], "Generating predictions")
 
 
 def main():
@@ -152,67 +135,65 @@ def main():
         description="Orchestrate the OIBC submission pipeline"
     )
     parser.add_argument(
-        '--config',
+        "--config",
         type=str,
-        default='p34/config.yaml',
-        help='Path to configuration file (default: p34/config.yaml)'
+        default="src/config.yaml",
+        help="Path to configuration file (default: src/config.yaml)",
     )
     parser.add_argument(
-        '--step',
+        "--step",
         type=str,
-        choices=['split', 'cluster', 'features', 'train', 'infer', 'all'],
-        default='all',
-        help='Pipeline step to run (default: all)'
+        choices=["split", "cluster", "features", "train", "infer", "all"],
+        default="all",
+        help="Pipeline step to run (default: all)",
     )
     parser.add_argument(
-        '--skip-split',
-        action='store_true',
-        help='Skip data splitting (if already done)'
+        "--skip-split",
+        action="store_true",
+        help="Skip data splitting (if already done)",
     )
     parser.add_argument(
-        '--skip-cluster',
-        action='store_true',
-        help='Skip clustering (if already done)'
+        "--skip-cluster", action="store_true", help="Skip clustering (if already done)"
     )
-    
+
     args = parser.parse_args()
-    
+
     setup_logging()
-    
+
     logging.info("=" * 60)
     logging.info("OIBC Submission Pipeline")
     logging.info("=" * 60)
-    
+
     # Load configuration
     config_path = Path(args.config)
     if not config_path.exists():
         logging.error(f"Configuration file not found: {config_path}")
         sys.exit(1)
-    
+
     config = load_config(config_path)
     logging.info(f"Loaded configuration from: {config_path}")
     logging.info(f"Mode: {config.get('mode', 'ensemble')}")
     logging.info(f"GPU: {config.get('use_gpu', False)}")
-    
+
     # Define pipeline steps
     steps = {
-        'split': step_split,
-        'cluster': step_cluster,
-        'features': step_features,
-        'train': step_train,
-        'infer': step_infer
+        "split": step_split,
+        "cluster": step_cluster,
+        "features": step_features,
+        "train": step_train,
+        "infer": step_infer,
     }
-    
+
     # Determine which steps to run
-    if args.step == 'all':
-        step_sequence = ['split', 'cluster', 'features', 'train', 'infer']
+    if args.step == "all":
+        step_sequence = ["split", "cluster", "features", "train", "infer"]
         if args.skip_split:
-            step_sequence.remove('split')
+            step_sequence.remove("split")
         if args.skip_cluster:
-            step_sequence.remove('cluster')
+            step_sequence.remove("cluster")
     else:
         step_sequence = [args.step]
-    
+
     # Execute steps
     success = True
     for step_name in step_sequence:
@@ -220,21 +201,21 @@ def main():
             logging.error(f"Pipeline failed at step: {step_name}")
             success = False
             break
-    
+
     if success:
         logging.info("=" * 60)
         logging.info("Pipeline completed successfully!")
         logging.info("=" * 60)
-        
+
         # Display output paths
-        save_path = Path(config.get('save_path', './output'))
+        save_path = Path(config.get("save_path", "./output"))
         if save_path.exists():
             logging.info(f"\nOutput directory: {save_path}")
             model_dir = save_path / "model"
             if model_dir.exists():
                 models = list(model_dir.glob("*.pkl"))
                 logging.info(f"Models saved: {len(models)}")
-            
+
             predictions = list(save_path.glob("predictions_*.csv"))
             if predictions:
                 logging.info(f"\nPredictions generated:")

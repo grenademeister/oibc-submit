@@ -41,7 +41,9 @@ def load_dataset(path: str, nrows: Optional[int] = None) -> pd.DataFrame:
 # Feature Engineering
 # ======================
 def engineer_features(
-    df: pd.DataFrame, latitude: float = DEFAULT_LATITUDE, longitude: float = DEFAULT_LONGITUDE
+    df: pd.DataFrame,
+    latitude: float = DEFAULT_LATITUDE,
+    longitude: float = DEFAULT_LONGITUDE,
 ) -> pd.DataFrame:
     """Add time, solar, and weather-based engineered features."""
     logging.info("Engineering features...")
@@ -124,7 +126,8 @@ def add_weather_interactions(df: pd.DataFrame) -> pd.DataFrame:
 def interpolate_weather(df: pd.DataFrame) -> pd.DataFrame:
     """Forward/back fill numeric features grouped by pv_id."""
     weather_cols = [
-        c for c in df.select_dtypes(include=[np.number]).columns
+        c
+        for c in df.select_dtypes(include=[np.number]).columns
         if c not in EXCLUDE_FEATURES and c not in CAT_FEATURES
     ]
     if "pv_id" in df.columns and weather_cols:
@@ -143,7 +146,9 @@ def align_feature_frames(
     test_filled = test_df.copy()
 
     common_numeric = [
-        c for c in train_filled.select_dtypes(include=[np.number]).columns if c in test_filled.columns
+        c
+        for c in train_filled.select_dtypes(include=[np.number]).columns
+        if c in test_filled.columns
     ]
     if common_numeric:
         medians = train_filled[common_numeric].median().fillna(0)
@@ -175,7 +180,9 @@ def build_feature_matrix(
     cat_features = [c for c in CAT_FEATURES if c in feature_cols]
     train_features = train_df[feature_cols]
     test_features = test_df[[c for c in feature_cols if c in test_df.columns]]
-    train_features, test_features = align_feature_frames(train_features, test_features, cat_features)
+    train_features, test_features = align_feature_frames(
+        train_features, test_features, cat_features
+    )
     return train_features, test_features, feature_cols, cat_features
 
 

@@ -19,6 +19,7 @@ from preprocess import (
     TARGET,
 )
 
+
 # ---------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------
@@ -29,6 +30,7 @@ def setup_logging(log_file: Path):
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.FileHandler(log_file, "w"), logging.StreamHandler()],
     )
+
 
 # ---------------------------------------------------------------------
 # Main function
@@ -94,7 +96,9 @@ def main():
     # Build feature matrices (same logic as training)
     # --------------------------------------------------------------
     logging.info("   Building feature matrices (train/val)...")
-    train_features, val_features, feature_cols, cat_features = build_feature_matrix(train, val)
+    train_features, val_features, feature_cols, cat_features = build_feature_matrix(
+        train, val
+    )
     logging.info(f"  → feature_cols: {len(feature_cols)}")
     logging.info(f"  → cat_features: {cat_features}")
 
@@ -108,7 +112,7 @@ def main():
             f"train[{c}]={train_features[c].dtype}, val[{c}]={val_features[c].dtype}, "
             f"test[{c}]={test_features[c].dtype}"
         )
-    
+
     if "pv_id" in feature_cols:
         feature_cols = [c for c in feature_cols if c != "pv_id"]
 
@@ -138,7 +142,9 @@ def main():
     # --------------------------------------------------------------
     # Load models (LightGBM first)
     # --------------------------------------------------------------
-    model_files = sorted([p for p in model_dir.glob("*.pkl") if p.name != "cluster_map.pkl"])
+    model_files = sorted(
+        [p for p in model_dir.glob("*.pkl") if p.name != "cluster_map.pkl"]
+    )
     if not model_files:
         raise FileNotFoundError(f"No model files found in {model_dir}")
 
@@ -177,7 +183,6 @@ def main():
         Xv = X_val.copy()
         Xt = X_test.copy()
 
-
         # ------------------ XGBoost ------------------
         if "xgb" in lname:
             logging.info("DEBUG: XGBoost branch")
@@ -190,7 +195,6 @@ def main():
 
             val_preds = model.predict(xgb_data["xgb_val"])
             test_preds = model.predict(xgb_data["xgb_test"])
-
 
         # ------------------ LightGBM ------------------
         elif "lightgbm" in lname:
@@ -206,8 +210,6 @@ def main():
 
             val_preds = model.predict(Xv)
             test_preds = model.predict(Xt)
-
-        
 
         # ------------------ CatBoost ------------------
         elif "catboost" in lname:
@@ -236,90 +238,60 @@ def main():
         out_individual = save_path / f"predictions_{name}.csv"
         if submission_path.exists():
             submission_model = pd.read_csv(submission_path)
-            target_col = "nins" if "nins" in submission_model.columns else submission_model.columns[-1]
+            target_col = (
+                "nins"
+                if "nins" in submission_model.columns
+                else submission_model.columns[-1]
+            )
             submission_model[target_col] = test_preds
         else:
             submission_model = pd.DataFrame({"nins": test_preds})
         submission_model.to_csv(out_individual, index=False)
         logging.info(f"   Saved individual predictions → {out_individual}")
 
-        # --------------------------------------------------------------
-    # GRID SEARCH: recursive simplex over all model weights
     # --------------------------------------------------------------
-    logging.info("   Starting GRID SEARCH over all model weights")
+    # Weighted ensemble (fixed weights by name)
+    # --------------------------------------------------------------
+    logging.info("   Building weighted ensemble (fixed weights)")
 
-    step = 0.1
-    grid = np.arange(0.0, 1.0 + step, step)
-    n_models = len(model_names)
+    name_based_weights = {
+        name: (
+            0.88
+            if "xgboost" in name.lower()
+            else (
+                0.10
+                if "lightgbm" in name.lower()
+                else 0.02 if "catboost" in name.lower() else 0.0
+            )
+        )
+        for name in model_names
+    }
+    weights = np.array([name_based_weights[n] for n in model_names])
 
-    results = []   # will store tuples: (mae, weight_vector)
+    # DEBUG: logging.info(f" raw weights by name: {name_based_weights}")
+    if np.isclose(weights.sum(), 0):
+        raise ValueError("All weights are zero; check model naming / weight scheme.")
+    weights /= weights.sum()
+    # DEBUG: logging.info(f" normalized weights (in model_names order): {weights}")
 
-    # ------------------------------
-    # Recursive weight generator
-    # ------------------------------
-    def dfs(level, current_weights):
-        s = sum(current_weights)
-        if s > 1.0:
-            return
-
-        # last model → remaining weight = 1 - sum
-        if level == n_models - 1:
-            w_last = 1.0 - s
-            if w_last < 0 or w_last > 1:
-                return
-
-            w = current_weights + [w_last]
-            w = np.array(w)
-
-            blended = np.zeros_like(val_preds_list[0])
-            for wi, pi in zip(w, val_preds_list):
-                blended += wi * pi
-
-            mae = mean_absolute_error(y_val_raw, blended)
-            results.append((mae, w))
-            return
-
-        # otherwise loop
-        for wv in grid:
-            dfs(level + 1, current_weights + [wv])
-
-    dfs(0, [])
-
-    # sort best 10
-    results.sort(key=lambda x: x[0])
-    best_mae, best_w = results[0]
-
-    logging.info(f"   BEST MAE = {best_mae:.6f}")
-    logging.info("   BEST WEIGHTS:")
-    for name, w in zip(model_names, best_w):
-        logging.info(f"  {name}: {w:.3f}")
-
-    logging.info("\n   TOP 10 Weight Combinations:")
-    logging.info(f"Model order → {model_names}")
-    for i, (mae, w) in enumerate(results[:10], 1):
-        logging.info(f"{i}. MAE={mae:.6f}, weights={np.round(w, 3).tolist()}")
-
-    # Build final ensemble with best weights
     ensemble_preds = np.zeros_like(test_preds_list[0])
-    for wi, pi, name in zip(best_w, test_preds_list, model_names):
-        logging.info(f"  → Using {name} weight={wi:.3f}")
-        ensemble_preds += wi * pi
+    for w, preds, name in zip(weights, test_preds_list, model_names):
+        logging.info(f"  → adding {name} with weight {w:.4f}")
+        ensemble_preds += w * preds
 
     # --------------------------------------------------------------
     # Save ensemble predictions
     # --------------------------------------------------------------
-    out_csv = save_path / "predictions_weighted_grid.csv"
+    out_csv = save_path / "predictions_weighted_fixed.csv"
     if submission_path.exists():
         submission = pd.read_csv(submission_path)
         target_col = "nins" if "nins" in submission.columns else submission.columns[-1]
         submission[target_col] = ensemble_preds
     else:
         submission = pd.DataFrame({"nins": ensemble_preds})
-
     submission.to_csv(out_csv, index=False)
-    logging.info(f"   Saved GRID-SEARCH ensemble predictions → {out_csv}")
-    logging.info("   Grid search inference finished successfully.")
-
+    logging.info(f"   Saved ensemble predictions → {out_csv}")
+    logging.info("   Inference finished successfully.")
 
 
 # ---------------------------------------------------------------------

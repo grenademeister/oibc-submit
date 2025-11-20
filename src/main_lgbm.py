@@ -5,13 +5,15 @@ from pathlib import Path
 from typing import Dict
 import numpy as np
 from sklearn.metrics import mean_absolute_error
+import pandas as pd
+import matplotlib.pyplot as plt
 
 try:
-    from catboost import CatBoostRegressor
+    from lightgbm import LGBMRegressor
 except ImportError:
-    CatBoostRegressor = None
+    LGBMRegressor = None
 
-from preprocess import engineer_features, build_feature_matrix, encode_for_xgb, TARGET
+from preprocess import engineer_features, build_feature_matrix, TARGET
 
 warnings.filterwarnings("ignore")
 
@@ -19,21 +21,24 @@ warnings.filterwarnings("ignore")
 # Model parameter definitions
 # ---------------------------------------------------------------------
 BASE_MODEL_PARAMS: Dict[str, Dict] = {
-    "catboost": {
-        "loss_function": "MAE",
-        "eval_metric": "MAE",
-        "iterations": 2000,
-        "learning_rate": 0.5,
-        "depth": 11,
-        "l2_leaf_reg": 3.0,
-        "random_seed": 42,
-        "allow_writing_files": False,
+    "lightgbm": {
+        "objective": "regression",
+        "metric": "mae",
+        "n_estimators": 4000,
+        "learning_rate": 0.046349,
+        "num_leaves": 110,
+        "subsample": 0.9,
+        "colsample_bytree": 0.8,
+        "random_state": 42,
+        "n_jobs": -1,
+        "verbose": -1,
     },
 }
 
 GPU_MODEL_PARAMS: Dict[str, Dict] = {
-    "catboost": {"task_type": "GPU", "devices": "0"},
+    "lightgbm": {"device": "cuda", "gpu_use_dp": False},
 }
+
 
 # ---------------------------------------------------------------------
 # Utility functions
@@ -43,20 +48,24 @@ def setup_logging(log_path: Path):
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_path, "w"), logging.StreamHandler()]
+        handlers=[logging.FileHandler(log_path, "w"), logging.StreamHandler()],
     )
+
 
 def check_gpu_available():
     try:
         import torch
+
         return torch.cuda.is_available()
     except ImportError:
         import subprocess
+
         try:
             subprocess.check_output(["nvidia-smi"])
             return True
         except Exception:
             return False
+
 
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as f:
@@ -71,36 +80,61 @@ def load_config(config_path="config.yaml"):
         yaml.safe_dump(cfg, f_out)
     return cfg
 
+
 def build_model(use_gpu=False):
-    params = BASE_MODEL_PARAMS["catboost"].copy()
+    params = BASE_MODEL_PARAMS["lightgbm"].copy()
     if use_gpu:
-        params.update(GPU_MODEL_PARAMS["catboost"])
-    return CatBoostRegressor(**params)
+        params.update(GPU_MODEL_PARAMS["lightgbm"])
+    return LGBMRegressor(**params)
+
 
 # ---------------------------------------------------------------------
 # Training function
 # ---------------------------------------------------------------------
-def train_single_model(gpu, cat_data, y_train, y_val, model_dir, cat_features):
+def train_single_model(
+    gpu, X_train, X_val, y_train, y_val, cat_features, model_dir: str | Path
+):
     start_time = time.time()
-    logging.info("   START training CATBOOST")
+    logging.info("   START training LIGHTGBM")
 
     model = build_model(use_gpu=gpu)
+
     model.fit(
-        cat_data["cat_train"], y_train,
-        eval_set=(cat_data["cat_val"], y_val),
-        cat_features=cat_features,
-        use_best_model=False,
-        verbose=100
+        X_train,
+        y_train,
+        eval_set=[(X_val, y_val)],
+        eval_metric="mae",
+        categorical_feature=cat_features or None,
     )
 
-    val_preds = np.maximum(model.predict(cat_data["cat_val"]), 0)
+    val_preds = np.maximum(model.predict(X_val), 0)
 
-    model_path = Path(model_dir) / "catboost.pkl"
+    model_path = Path(model_dir) / "lightgbm.pkl"
     with open(model_path, "wb") as f:
         pickle.dump(model, f)
 
-    logging.info(f"   FINISHED CATBOOST ({time.time() - start_time:.2f}s)")
+    # ------------------------- NEW: Save feature importance -------------------------
+    fi = pd.DataFrame(
+        {"feature": X_train.columns, "importance": model.feature_importances_}
+    ).sort_values("importance", ascending=False)
+
+    fi_csv_path = Path(model_dir) / "feature_importance.csv"
+    fi.to_csv(fi_csv_path, index=False)
+    logging.info(f"Saved feature importance CSV to {fi_csv_path}")
+
+    plt.figure(figsize=(10, 12))
+    plt.barh(fi["feature"], fi["importance"])
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    fi_png_path = Path(model_dir) / "feature_importance.png"
+    plt.savefig(fi_png_path, dpi=200)
+    plt.close()
+    logging.info(f"Saved feature importance PNG to {fi_png_path}")
+    # ------------------------------------------------------------------------------
+
+    logging.info(f"   FINISHED LIGHTGBM ({time.time() - start_time:.2f}s)")
     return val_preds
+
 
 # ---------------------------------------------------------------------
 # Main
@@ -128,15 +162,17 @@ def main():
     logging.info(f"Using processed cache path: {processed_dir}")
 
     logging.info("   Loading pre-built train/validation cluster features...")
-    train = joblib.load(cfg["train_cluster_features"])
-    val = joblib.load(cfg["val_cluster_features"])
-    test = joblib.load(cfg["test_cluster_features"])
-    logging.info(f"   Loaded train {train.shape}, val {val.shape}, test {test.shape}")
+    train_raw = joblib.load(cfg["train_cluster_features"])
+    val_raw = joblib.load(cfg["val_cluster_features"])
+    test_raw = joblib.load(cfg["test_cluster_features"])
+    logging.info(
+        f"   Loaded train {train_raw.shape}, val {val_raw.shape}, test {test_raw.shape}"
+    )
 
     datasets = {
-        "train": (train_path, train),
-        "val": (val_path, val),
-        "test": (test_path, test),
+        "train": (train_path, train_raw),
+        "val": (val_path, val_raw),
+        "test": (test_path, test_raw),
     }
     processed_results = {}
 
@@ -180,23 +216,39 @@ def main():
 
     logging.info("   Building feature matrices...")
     t0 = time.time()
-    train_features, val_features, feature_cols, cat_features = build_feature_matrix(train_processed, val_processed)
+    train_features, val_features, feature_cols, cat_features = build_feature_matrix(
+        train_processed, val_processed
+    )
     logging.info(f"   Feature matrix built in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"     Categorical features: {cat_features}")
+
+    _, test_features, _, _ = build_feature_matrix(train_processed, test_processed)
+
+    for c in cat_features:
+        logging.info(
+            f"  - {c} dtype (train): {train_features[c].dtype}, (val): {val_features[c].dtype}"
+        )
+
+    if "pv_id" in feature_cols:
+        feature_cols = [c for c in feature_cols if c != "pv_id"]
+
+    if "pv_id" in cat_features:
+        cat_features = [c for c in cat_features if c != "pv_id"]
 
     X_train = train_features[feature_cols]
-    y_train = train[TARGET].clip(lower=0).values
+    y_train = train_processed[TARGET].clip(lower=0).values
     X_val = val_features[feature_cols]
-    y_val = val[TARGET].clip(lower=0).values
-    y_val_raw = val[TARGET].values
+    y_val = val_processed[TARGET].clip(lower=0).values
+    y_val_raw = val_processed[TARGET].values
 
-    cat_data = {"cat_train": X_train, "cat_val": X_val}
-
-    val_preds = train_single_model(gpu, cat_data, y_train, y_val, cfg["model_dir"], cat_features)
+    val_preds = train_single_model(
+        gpu, X_train, X_val, y_train, y_val, cat_features, cfg["model_dir"]
+    )
 
     mae = mean_absolute_error(y_val_raw, val_preds)
     logging.info(f"   Final Validation MAE = {mae:.5f}")
     logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# ---------------------------------------------------------------------
+
 if __name__ == "__main__":
     main()
