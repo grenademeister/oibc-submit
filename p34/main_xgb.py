@@ -84,7 +84,7 @@ def build_model(use_gpu=False):
 # ---------------------------------------------------------------------
 def train_single_model(gpu, xgb_data, y_train, y_val, model_dir):
     start_time = time.time()
-    logging.info("▶ START training XGBOOST")
+    logging.info("   START training XGBOOST")
 
     model = build_model(use_gpu=gpu)
     eval_set = [(xgb_data["xgb_val"], y_val)]
@@ -95,7 +95,7 @@ def train_single_model(gpu, xgb_data, y_train, y_val, model_dir):
     with open(model_path, "wb") as f:
         pickle.dump(model, f)
 
-    logging.info(f"✓ FINISHED XGBOOST ({time.time() - start_time:.2f}s)")
+    logging.info(f"   FINISHED XGBOOST ({time.time() - start_time:.2f}s)")
     return val_preds
 
 # ---------------------------------------------------------------------
@@ -112,7 +112,7 @@ def main():
     if cfg["use_gpu"] and not gpu:
         logging.warning("GPU requested but not available — running on CPU.")
 
-    # ✅ Define processed cache directory (use from config if available)
+    #    Define processed cache directory (use from config if available)
     if "processed_cache_path" in cfg and cfg["processed_cache_path"]:
         processed_dir = Path(cfg["processed_cache_path"])
     else:
@@ -124,19 +124,19 @@ def main():
     test_path = processed_dir / "test_processed.joblib"
     logging.info(f"Using processed cache path: {processed_dir}")
 
-    # ✅ Load pre-built cluster-enhanced feature sets
-    logging.info("▶ Loading pre-built train/validation cluster features...")
+    #    Load pre-built cluster-enhanced feature sets
+    logging.info("   Loading pre-built train/validation cluster features...")
     train = joblib.load(cfg["train_cluster_features"])
     val = joblib.load(cfg["val_cluster_features"])
     test = joblib.load(cfg["test_cluster_features"])
-    logging.info(f"✅ Loaded train {train.shape}, val {val.shape}, test {test.shape}")
+    logging.info(f"   Loaded train {train.shape}, val {val.shape}, test {test.shape}")
 
     # ### DEBUG: check pv_id presence in RAW
     for name, df in [("train_raw", train), ("val_raw", val), ("test_raw", test)]:
         has_pv = "pv_id" in df.columns
         logging.info(f"DEBUG [{name}] has pv_id column? {has_pv}")
 
-    # ✅ Use cached processed data if available (check each file individually)
+    #    Use cached processed data if available (check each file individually)
     datasets = {
         "train": (train_path, train),
         "val": (val_path, val),
@@ -184,18 +184,18 @@ def main():
         logging.info(f"  - {col}")
     logging.info(f"DEBUG val_processed has pv_id? {'pv_id' in val_processed.columns}")
 
-    # ✅ If preprocess_only, exit after caching
+    #    If preprocess_only, exit after caching
     if preprocess_only:
         logging.info("🛑 preprocess_only=True → Skipping training and exiting.")
         return
 
     # Build aligned feature matrices
-    logging.info("▶ Building feature matrices...")
+    logging.info("   Building feature matrices...")
     t0 = time.time()
     train_features, val_features, feature_cols, cat_features = build_feature_matrix(
         train_processed, val_processed
     )
-    logging.info(f"✓ Feature matrix built in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"   Feature matrix built in {(time.time() - t0)/60:.2f} min")
 
     # ### DEBUG: before any drop
     logging.info(f"DEBUG initial feature_cols length = {len(feature_cols)}")
@@ -240,8 +240,8 @@ def main():
     val_preds = train_single_model(gpu, xgb_data, y_train, y_val, cfg["model_dir"])
 
     mae = mean_absolute_error(y_val_raw, val_preds)
-    logging.info(f"🏁 Final Validation MAE = {mae:.5f}")
-    logging.info(f"✅ All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"   Final Validation MAE = {mae:.5f}")
+    logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":

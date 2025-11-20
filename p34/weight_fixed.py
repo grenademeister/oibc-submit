@@ -45,14 +45,14 @@ def main():
     log_path = save_path / "inference_weighted_fixed_debug.log"
     setup_logging(log_path)
 
-    logging.info("🚀 Starting weighted-fixed inference (DEBUG mode, LightGBM first)...")
+    logging.info("   Starting weighted-fixed inference (DEBUG mode, LightGBM first)...")
 
     processed_dir = (
         Path(cfg["processed_cache_path"])
         if "processed_cache_path" in cfg and cfg["processed_cache_path"]
         else save_path / "processed_features"
     )
-    logging.info(f"📂 Using processed features from: {processed_dir}")
+    logging.info(f"   Using processed features from: {processed_dir}")
 
     # --------------------------------------------------------------
     # Load processed frames
@@ -60,13 +60,13 @@ def main():
     train = joblib.load(processed_dir / "train_processed.joblib")
     val = joblib.load(processed_dir / "val_processed.joblib")
     test = joblib.load(processed_dir / "test_processed.joblib")
-    logging.info(f"✅ Loaded: train {train.shape}, val {val.shape}, test {test.shape}")
+    logging.info(f"   Loaded: train {train.shape}, val {val.shape}, test {test.shape}")
 
     # Debug initial dtypes
     for name, df in [("train", train), ("val", val), ("test", test)]:
         pv_dtype = df["pv_id"].dtype if "pv_id" in df.columns else "MISSING"
         cl_dtype = df["cluster"].dtype if "cluster" in df.columns else "MISSING"
-        logging.info(f"DEBUG [{name}] BEFORE cast → pv_id: {pv_dtype}, cluster: {cl_dtype}")
+        # DEBUG: logging.info(f" [{name}] BEFORE cast → pv_id: {pv_dtype}, cluster: {cl_dtype}")
 
     # --------------------------------------------------------------
     # Ensure pv_id / cluster are categorical BEFORE feature matrix
@@ -80,7 +80,7 @@ def main():
     for name, df in [("train", train), ("val", val), ("test", test)]:
         pv_dtype = df["pv_id"].dtype if "pv_id" in df.columns else "MISSING"
         cl_dtype = df["cluster"].dtype if "cluster" in df.columns else "MISSING"
-        logging.info(f"DEBUG [{name}] AFTER cast → pv_id: {pv_dtype}, cluster: {cl_dtype}")
+        # DEBUG: logging.info(f" [{name}] AFTER cast → pv_id: {pv_dtype}, cluster: {cl_dtype}")
 
     # --------------------------------------------------------------
     # Drop 'hour' if present
@@ -93,12 +93,12 @@ def main():
     # --------------------------------------------------------------
     # Build feature matrices (same logic as training)
     # --------------------------------------------------------------
-    logging.info("▶ Building feature matrices (train/val)...")
+    logging.info("   Building feature matrices (train/val)...")
     train_features, val_features, feature_cols, cat_features = build_feature_matrix(train, val)
     logging.info(f"  → feature_cols: {len(feature_cols)}")
     logging.info(f"  → cat_features: {cat_features}")
 
-    logging.info("▶ Building feature matrices (train/test)...")
+    logging.info("   Building feature matrices (train/test)...")
     _, test_features, _, _ = build_feature_matrix(train, test)
 
     # Debug dtypes after feature matrix
@@ -122,9 +122,9 @@ def main():
     X_val = val_features[feature_cols]
     X_test = test_features[feature_cols]
 
-    logging.info(f"DEBUG: X_train shape = {X_train.shape}")
-    logging.info(f"DEBUG: X_val shape   = {X_val.shape}")
-    logging.info(f"DEBUG: X_test shape  = {X_test.shape}")
+    # DEBUG: logging.info(f": X_train shape = {X_train.shape}")
+    # DEBUG: logging.info(f": X_val shape   = {X_val.shape}")
+    # DEBUG: logging.info(f": X_test shape  = {X_test.shape}")
 
     y_val = val[TARGET].clip(lower=0).values
     y_val_raw = val[TARGET].values
@@ -169,9 +169,9 @@ def main():
         name = model_file.stem
         lname = name.lower()
 
-        logging.info("══════════════════════════════════════")
-        logging.info(f"▶ Predicting with model: {name}")
-        logging.info("══════════════════════════════════════")
+        logging.info("--------------------")
+        logging.info(f"   Predicting with model: {name}")
+        logging.info("--------------------")
 
         # fresh copies
         Xv = X_val.copy()
@@ -183,10 +183,10 @@ def main():
             logging.info("DEBUG: XGBoost branch")
 
             # 🔥 NEW DEBUG
-            logging.info(f"DEBUG Xv.columns = {list(X_val.columns)}")
-            logging.info(f"DEBUG feature_cols = {feature_cols}")
-            logging.info(f"DEBUG cat_features = {cat_features}")
-            logging.info(f"DEBUG xgb_val columns = {list(xgb_data['xgb_val'].columns)}")
+            # DEBUG: logging.info(f" Xv.columns = {list(X_val.columns)}")
+            # DEBUG: logging.info(f" feature_cols = {feature_cols}")
+            # DEBUG: logging.info(f" cat_features = {cat_features}")
+            # DEBUG: logging.info(f" xgb_val columns = {list(xgb_data['xgb_val'].columns)}")
 
             val_preds = model.predict(xgb_data["xgb_val"])
             test_preds = model.predict(xgb_data["xgb_test"])
@@ -198,7 +198,7 @@ def main():
 
             # Use model's feature order if available
             model_feature_names = getattr(model, "feature_name_", list(X_train.columns))
-            logging.info(f"DEBUG: LightGBM expects {len(model_feature_names)} features")
+            # DEBUG: logging.info(f": LightGBM expects {len(model_feature_names)} features")
 
             # Reindex to model's expected columns (order + subset)
             Xv = Xv.reindex(columns=model_feature_names)
@@ -207,9 +207,9 @@ def main():
             # dtypes for categorical features at inference
             for c in cat_features:
                 if c in Xv.columns:
-                    logging.info(f"DEBUG LightGBM: Xv[{c}] dtype={Xv[c].dtype}")
+                    # DEBUG: logging.info(f" LightGBM: Xv[{c}] dtype={Xv[c].dtype}")
                 if c in Xt.columns:
-                    logging.info(f"DEBUG LightGBM: Xt[{c}] dtype={Xt[c].dtype}")
+                    # DEBUG: logging.info(f" LightGBM: Xt[{c}] dtype={Xt[c].dtype}")
 
             val_preds = model.predict(Xv)
             test_preds = model.predict(Xt)
@@ -248,12 +248,12 @@ def main():
         else:
             submission_model = pd.DataFrame({"nins": test_preds})
         submission_model.to_csv(out_individual, index=False)
-        logging.info(f"📄 Saved individual predictions → {out_individual}")
+        logging.info(f"   Saved individual predictions → {out_individual}")
 
     # --------------------------------------------------------------
     # Weighted ensemble (fixed weights by name)
     # --------------------------------------------------------------
-    logging.info("▶ Building weighted ensemble (fixed weights)")
+    logging.info("   Building weighted ensemble (fixed weights)")
 
     name_based_weights = {
         name: 0.88 if "xgboost" in name.lower() else
@@ -263,11 +263,11 @@ def main():
     }
     weights = np.array([name_based_weights[n] for n in model_names])
 
-    logging.info(f"DEBUG raw weights by name: {name_based_weights}")
+    # DEBUG: logging.info(f" raw weights by name: {name_based_weights}")
     if np.isclose(weights.sum(), 0):
         raise ValueError("All weights are zero; check model naming / weight scheme.")
     weights /= weights.sum()
-    logging.info(f"DEBUG normalized weights (in model_names order): {weights}")
+    # DEBUG: logging.info(f" normalized weights (in model_names order): {weights}")
 
     ensemble_preds = np.zeros_like(test_preds_list[0])
     for w, preds, name in zip(weights, test_preds_list, model_names):
@@ -285,8 +285,8 @@ def main():
     else:
         submission = pd.DataFrame({"nins": ensemble_preds})
     submission.to_csv(out_csv, index=False)
-    logging.info(f"✓ Saved ensemble predictions → {out_csv}")
-    logging.info("✅ Inference finished successfully.")
+    logging.info(f"   Saved ensemble predictions → {out_csv}")
+    logging.info("   Inference finished successfully.")
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":

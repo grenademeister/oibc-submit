@@ -167,7 +167,7 @@ def build_model(model_name: str, use_gpu=False):
 # ---------------------------------------------------------------------
 def train_single_model(model_name, gpu, xgb_data, X_train, X_val, X_test, y_train, y_val, cat_features, model_dir):
     start_time = time.time()
-    logging.info(f"▶ START training {model_name.upper()}")
+    logging.info(f"   START training {model_name.upper()}")
 
     model = build_model(model_name, use_gpu=gpu)
 
@@ -198,7 +198,7 @@ def train_single_model(model_name, gpu, xgb_data, X_train, X_val, X_test, y_trai
     with open(model_path, "wb") as f:
         pickle.dump(model, f)
 
-    logging.info(f"✓ FINISHED {model_name.upper()} ({time.time() - start_time:.2f}s)")
+    logging.info(f"   FINISHED {model_name.upper()} ({time.time() - start_time:.2f}s)")
     return model_name, val_preds, test_preds
 
 # ---------------------------------------------------------------------
@@ -221,7 +221,7 @@ def find_best_weights(val_preds_list, y_val_raw, top_k: int = 4):
 
     results.sort(key=lambda x: x[0])
     best_score, best_weights = results[0]
-    logging.info(f"✅ Best MAE on validation = {best_score:.5f} with weights {best_weights}")
+    logging.info(f"   Best MAE on validation = {best_score:.5f} with weights {best_weights}")
 
     logging.info("📊 Top 4 weight combinations:")
     for i, (score, weights) in enumerate(results[:top_k], 1):
@@ -241,7 +241,7 @@ def main():
     params_file = Path(cfg["setting_dir"]) / "base_model_params.yaml"
     with open(params_file, "w") as f:
         yaml.safe_dump(BASE_MODEL_PARAMS, f)
-    logging.info(f"✓ Saved base model parameters → {params_file}")
+    logging.info(f"   Saved base model parameters → {params_file}")
 
     gpu = check_gpu_available() and cfg["use_gpu"]
     if cfg["use_gpu"] and not gpu:
@@ -251,14 +251,14 @@ def main():
     train = load_dataset(Path(cfg["data_path"]) / cfg["train_file"], nrows=nrows)
     test = load_dataset(Path(cfg["data_path"]) / cfg["test_file"], nrows=nrows)
 
-    logging.info("▶ Feature processing...")
+    logging.info("   Feature processing...")
     t0 = time.time()
     train = create_spatial_clusters(train, cfg["n_clusters"], save_dir=cfg["model_dir"])
     test = apply_spatial_clusters(test, load_dir=cfg["model_dir"])
     train_processed = engineer_features(train).dropna(subset=[TARGET])
     test_processed = engineer_features(test)
     train_features, test_features, feature_cols, cat_features = build_feature_matrix(train_processed, test_processed)
-    logging.info(f"✓ Feature engineering done in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"   Feature engineering done in {(time.time() - t0)/60:.2f} min")
 
     modeling_frame = train_processed[["time", TARGET]].join(train_features)
     
@@ -290,10 +290,10 @@ def main():
     if len(model_list) > 1:
         weights = find_best_weights(val_preds_list, y_val_raw)
         ensemble_preds = sum(w * p for w, p in zip(weights, test_preds_list))
-        logging.info(f"✅ Using optimized weights: {weights}")
+        logging.info(f"   Using optimized weights: {weights}")
     else:
         ensemble_preds = test_preds_list[0]
-        logging.info(f"✅ Single model mode: {model_list[0]}")
+        logging.info(f"   Single model mode: {model_list[0]}")
 
     # Save predictions
     submission = load_dataset(Path(cfg["data_path"]) / cfg["submission_file"])
@@ -302,8 +302,8 @@ def main():
     submission["nins"] = ensemble_preds
     output_csv = Path(cfg["save_path"]) / "predictions.csv"
     submission.to_csv(output_csv, index=False)
-    logging.info(f"✓ Saved predictions to {output_csv}")
-    logging.info(f"✅ All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"   Saved predictions to {output_csv}")
+    logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ---------------------------------------------------------------------
 if __name__ == "__main__":

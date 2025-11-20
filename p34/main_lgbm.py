@@ -86,7 +86,7 @@ def build_model(use_gpu=False):
 # ---------------------------------------------------------------------
 def train_single_model(gpu, X_train, X_val, y_train, y_val, cat_features, model_dir: str | Path):
     start_time = time.time()
-    logging.info("▶ START training LIGHTGBM")
+    logging.info("   START training LIGHTGBM")
 
     model = build_model(use_gpu=gpu)
 
@@ -124,7 +124,7 @@ def train_single_model(gpu, X_train, X_val, y_train, y_val, cat_features, model_
     logging.info(f"Saved feature importance PNG to {fi_png_path}")
     # ------------------------------------------------------------------------------
 
-    logging.info(f"✓ FINISHED LIGHTGBM ({time.time() - start_time:.2f}s)")
+    logging.info(f"   FINISHED LIGHTGBM ({time.time() - start_time:.2f}s)")
     return val_preds
 
 # ---------------------------------------------------------------------
@@ -152,11 +152,11 @@ def main():
     test_path = processed_dir / "test_processed.joblib"
     logging.info(f"Using processed cache path: {processed_dir}")
 
-    logging.info("▶ Loading pre-built train/validation cluster features...")
+    logging.info("   Loading pre-built train/validation cluster features...")
     train_raw = joblib.load(cfg["train_cluster_features"])
     val_raw = joblib.load(cfg["val_cluster_features"])
     test_raw = joblib.load(cfg["test_cluster_features"])
-    logging.info(f"✅ Loaded train {train_raw.shape}, val {val_raw.shape}, test {test_raw.shape}")
+    logging.info(f"   Loaded train {train_raw.shape}, val {val_raw.shape}, test {test_raw.shape}")
 
     datasets = {
         "train": (train_path, train_raw),
@@ -203,14 +203,14 @@ def main():
         logging.info("🛑 preprocess_only=True → Skipping training and exiting.")
         return
 
-    logging.info("▶ Building feature matrices...")
+    logging.info("   Building feature matrices...")
     t0 = time.time()
     train_features, val_features, feature_cols, cat_features = build_feature_matrix(
         train_processed,
         val_processed
     )
-    logging.info(f"✓ Feature matrix built in {(time.time() - t0)/60:.2f} min")
-    logging.info(f"  ▶ Categorical features: {cat_features}")
+    logging.info(f"   Feature matrix built in {(time.time() - t0)/60:.2f} min")
+    logging.info(f"     Categorical features: {cat_features}")
 
     _, test_features, _, _ = build_feature_matrix(train_processed, test_processed)
 
@@ -232,8 +232,8 @@ def main():
     val_preds = train_single_model(gpu, X_train, X_val, y_train, y_val, cat_features, cfg["model_dir"])
 
     mae = mean_absolute_error(y_val_raw, val_preds)
-    logging.info(f"🏁 Final Validation MAE = {mae:.5f}")
-    logging.info(f"✅ All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"   Final Validation MAE = {mae:.5f}")
+    logging.info(f"   All done at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":
     main()
