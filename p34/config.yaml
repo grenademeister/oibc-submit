@@ -1,0 +1,35 @@
+
+save_path: /workspace/oibc/data/result/exp34_all_1
+
+data_path: /workspace/oibc/data
+submission_file: submission_sample.csv
+
+
+mode: "xgboost"        # ensemble, lightgbm, catboost, or xgboost
+n_clusters: 10
+use_gpu: true
+
+use_subset: false       # if true, only load a subset of rows
+num_subset: 100         # number of rows to load when use_subset=true
+
+# paths for clustering / validation
+train_split_path: "/workspace/oibc/data/train.csv"
+val_split_path: "/workspace/oibc/data_split/val_split.csv"
+
+train_cluster_model: "/workspace/oibc/cluster_all/train_cluster_model.joblib"
+train_cluster_centroids: "/workspace/oibc/cluster_all/train_cluster_centroids.joblib"
+train_cluster_features: "/workspace/oibc/cluster_all/train_with_cluster_means_and_ratios.joblib"
+val_cluster_features: "/workspace/oibc/cluster_all/val_with_cluster_means_and_ratios.joblib"
+test_cluster_features: "/workspace/oibc/cluster_all/test_with_cluster_means_and_ratios.joblib"
+
+# train_split_path: "/workspace/oibc/data_split/train_split.csv"
+# val_split_path: "/workspace/oibc/data_split/val_split.csv"
+
+# train_cluster_model: "/workspace/oibc/cluster/train_cluster_model.joblib"
+# train_cluster_centroids: "/workspace/oibc/cluster/train_cluster_centroids.joblib"
+# train_cluster_features: "/workspace/oibc/cluster/train_with_cluster_means_and_ratios.joblib"
+# val_cluster_features: "/workspace/oibc/cluster/val_with_cluster_means_and_ratios.joblib"
+# test_cluster_features: "/workspace/oibc/cluster/test_with_cluster_means_and_ratios.joblib"
+
+
+processed_cache_path: "/workspace/oibc/data/result/exp32_1/processed_features"
